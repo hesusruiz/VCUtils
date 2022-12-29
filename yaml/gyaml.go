@@ -220,9 +220,17 @@ func (y *YAML) List(path string, defaults ...[]any) []any {
 }
 
 // ListString is for the very common case of a list of strings
-func (y *YAML) ListString(path string, defaults ...[]any) []string {
-	value := y.List(path, defaults...)
-	return ToListString(value)
+func (y *YAML) ListString(path string, defaults ...[]string) []string {
+	value, err := y.list(path)
+
+	if err == nil {
+		return ToListString(value)
+	}
+
+	for _, def := range defaults {
+		return def
+	}
+	return make([]string, 0)
 }
 
 func ToListString(in []any) []string {
