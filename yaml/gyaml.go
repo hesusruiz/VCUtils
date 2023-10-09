@@ -302,10 +302,19 @@ func typeMismatch(expected string, got any) error {
 }
 
 // Get returns a child of the given value according to a dotted path.
+// The source data must be either map[string]any or []any
 func Get(src any, path string) (any, error) {
 	parts := strings.Split(path, ".")
 
-	// Normalize path.
+	// Quick short-circuits
+	if path == "" || path == "." {
+		return src, nil
+	}
+	if len(parts) == 1 && parts[0] == "." {
+		return src, nil
+	}
+
+	// Normalize path, for example when there are two consecutive dots
 	for k, v := range parts {
 		if v == "" {
 			if k == 0 {
@@ -315,30 +324,37 @@ func Get(src any, path string) (any, error) {
 			}
 		}
 	}
+
 	// Get the value.
 	for pos, pathComponent := range parts {
 
 		switch c := src.(type) {
+
 		case []any:
-			if i, error := strconv.ParseInt(pathComponent, 10, 0); error == nil {
-				if int(i) < len(c) {
-					src = c[i]
-				} else {
-					return nil, fmt.Errorf(
-						"index out of range at %q: list has only %v items",
-						strings.Join(parts[:pos+1], "."), len(c))
-				}
-			} else {
+			// If data is an array, the path component must be an integer (base 10) to index the array
+			i, err := strconv.ParseInt(pathComponent, 10, 0)
+			if err != nil {
 				return nil, fmt.Errorf("invalid list index at %q",
 					strings.Join(parts[:pos+1], "."))
 			}
+			if int(i) < len(c) {
+				// Update src to be teh indexed element of the array
+				src = c[i]
+			} else {
+				return nil, fmt.Errorf(
+					"index out of range at %q: list has only %v items",
+					strings.Join(parts[:pos+1], "."), len(c))
+			}
+
 		case map[string]any:
+			// If data is a map, try to get the corresponding element
 			if value, ok := c[pathComponent]; ok {
 				src = value
 			} else {
 				return nil, fmt.Errorf("nonexistent map key at %q",
 					strings.Join(parts[:pos+1], "."))
 			}
+
 		default:
 			return nil, fmt.Errorf(
 				"invalid type at %q: expected []any or map[string]any; got %T",
